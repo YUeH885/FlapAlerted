@@ -78,6 +78,7 @@ const dataRouteChangeCount = {
     const ownURL = new URL(location.href);
     const prefix = ownURL.searchParams.get("prefix");
     const userDefined = ownURL.searchParams.get("userDefined") === "true";
+    const sessionRemote = ownURL.searchParams.get("sessionRemote");
     const timestamp = ownURL.searchParams.get("timestamp");
     if (!prefix) {
         document.getElementById("loader").classList.add("d-none");
@@ -91,11 +92,14 @@ const dataRouteChangeCount = {
     if (userDefined) {
         prefixInfoEndpoint = `../userDefined/prefix?prefix=${encodeURIComponent(prefix)}`;
     }
+    if (sessionRemote) {
+        prefixInfoEndpoint = `../sessions/prefix?prefix=${encodeURIComponent(prefix)}&remote=${encodeURIComponent(sessionRemote)}`;
+    }
     if (timestamp) {
         prefixInfoEndpoint = `${historicalEndpoint}&timestamp=${timestamp}`;
     }
     fetch(prefixInfoEndpoint, getFetchOptions()).then((response) => response.json()).then(async (json) => {
-        if (json === null && !timestamp) {
+        if (json === null && !timestamp && !sessionRemote) {
             const histResponse = await fetch(historicalEndpoint, getFetchOptions());
             const histJson = await histResponse.json();
             displayPrefix(histJson, false);
@@ -210,7 +214,7 @@ function displayPrefix(json, userDefined) {
         document.getElementById("averageDisplay").innerText = "Not available for user-defined";
     }
 
-    const durationSeconds = reportTimestamp - eventData.FirstSeen
+    const durationSeconds = Math.max(1, reportTimestamp - eventData.FirstSeen)
     const averageTotal = eventData.TotalPathChanges / durationSeconds;
     document.getElementById("averageTotalDisplay").innerText = `${averageTotal.toFixed(2)}/s (total)`;
 

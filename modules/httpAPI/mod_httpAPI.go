@@ -67,6 +67,7 @@ func startComplete() {
 	mux.HandleFunc("/peers/asn", antiScrapeMiddleware(getPeer))
 	mux.HandleFunc("/flaps/statStream", getStatisticStream)
 	mux.HandleFunc("/sessions", antiScrapeMiddleware(getBgpSessions))
+	mux.HandleFunc("/sessions/prefix", antiScrapeMiddleware(getBgpSessionPrefix))
 
 	mux.HandleFunc("/flaps/historical/prefix", antiScrapeMiddleware(getHistoricalPrefix))
 	mux.HandleFunc("/flaps/historical/list", antiScrapeMiddleware(getHistoricalList))

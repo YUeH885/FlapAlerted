@@ -3,7 +3,6 @@ package analyze
 import (
 	"FlapAlerted/bgp/common"
 	"container/list"
-	"encoding/binary"
 	"encoding/json"
 	"math"
 	"sync"
@@ -16,15 +15,9 @@ type PathTracker struct {
 	lock  sync.RWMutex
 }
 
-type PathInfo struct {
-	Path              common.AsPath
-	AnnouncementCount uint64 `json:"ac"`
-	WithdrawalCount   uint64 `json:"wc"`
-}
-
 type pathEntry struct {
 	key   string
-	info  *PathInfo
+	info  *common.PathInfo
 	ticks int
 }
 
@@ -32,12 +25,12 @@ func (pt *PathTracker) record(path common.AsPath, isWithdrawal bool) {
 	if pt.limit == 0 {
 		return
 	}
-	key := pathToKey(path)
+	key := common.PathKey(path)
 
 	pt.lock.Lock()
 	defer pt.lock.Unlock()
 
-	if elem, exists := pt.paths[string(key)]; exists {
+	if elem, exists := pt.paths[key]; exists {
 		entry := elem.Value.(*pathEntry)
 		if isWithdrawal {
 			incrementUint64(&entry.info.WithdrawalCount)
@@ -54,7 +47,7 @@ func (pt *PathTracker) record(path common.AsPath, isWithdrawal bool) {
 		pt.deleteLeastValuable()
 	}
 
-	pathInfoEntry := &PathInfo{
+	pathInfoEntry := &common.PathInfo{
 		Path: path,
 	}
 	if isWithdrawal {
@@ -64,20 +57,10 @@ func (pt *PathTracker) record(path common.AsPath, isWithdrawal bool) {
 	}
 
 	elem := pt.order.PushBack(&pathEntry{
-		key:  string(key),
+		key:  key,
 		info: pathInfoEntry,
 	})
-	pt.paths[string(key)] = elem
-}
-func pathToKey(p common.AsPath) []byte {
-	if len(p) == 0 {
-		return nil
-	}
-	buf := make([]byte, len(p)*4)
-	for i, v := range p {
-		binary.LittleEndian.PutUint32(buf[i*4:], v)
-	}
-	return buf
+	pt.paths[key] = elem
 }
 
 func (pt *PathTracker) deleteLeastValuable() {
@@ -115,8 +98,8 @@ func (pt *PathTracker) deleteLeastValuable() {
 	delete(pt.paths, entry.key)
 }
 
-func (pt *PathTracker) All() func(func(*PathInfo) bool) {
-	return func(yield func(*PathInfo) bool) {
+func (pt *PathTracker) All() func(func(*common.PathInfo) bool) {
+	return func(yield func(*common.PathInfo) bool) {
 		pt.lock.RLock()
 		defer pt.lock.RUnlock()
 		for elem := pt.order.Front(); elem != nil; elem = elem.Next() {
@@ -142,7 +125,7 @@ func (pt *PathTracker) MarshalJSON() ([]byte, error) {
 	pt.lock.RLock()
 	defer pt.lock.RUnlock()
 
-	var entries = make([]*PathInfo, 0, pt.order.Len())
+	var entries = make([]*common.PathInfo, 0, pt.order.Len())
 	for elem := pt.order.Front(); elem != nil; elem = elem.Next() {
 		entry := elem.Value.(*pathEntry)
 		entries = append(entries, entry.info)
@@ -152,7 +135,7 @@ func (pt *PathTracker) MarshalJSON() ([]byte, error) {
 }
 
 func (pt *PathTracker) UnmarshalJSON(data []byte) error {
-	var entries []*PathInfo
+	var entries []*common.PathInfo
 	if err := json.Unmarshal(data, &entries); err != nil {
 		return err
 	}
@@ -168,7 +151,7 @@ func (pt *PathTracker) UnmarshalJSON(data []byte) error {
 	}
 
 	for _, info := range entries {
-		key := string(pathToKey(info.Path))
+		key := common.PathKey(info.Path)
 		elem := pt.order.PushBack(&pathEntry{
 			key:  key,
 			info: info,

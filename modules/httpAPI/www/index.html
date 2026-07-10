@@ -27,7 +27,7 @@
             <table id="tablePrefixes">
                 <thead>
                 <tr>
-                    <th class="toggle-view-btn" title="Switch to Peers view">Prefix <span class="toggle-view-icon">⇄</span></th>
+                    <th class="toggle-view-btn" title="Switch to Peer AS view">Prefix <span class="toggle-view-icon">⇄</span></th>
                     <th>Duration</th>
                     <th>Route Changes</th>
                     <th>Rate</th>
@@ -42,12 +42,26 @@
             <table id="tablePeers" class="d-none">
                 <thead>
                 <tr>
-                    <th class="toggle-view-btn" title="Switch to Prefixes view">Peer ASN <span class="toggle-view-icon">⇄</span></th>
+                    <th class="toggle-view-btn" title="Switch to Sessions view">Peer AS <span class="toggle-view-icon">⇄</span></th>
                     <th>Avg Rate (60 min)</th>
                     <th>Rate</th>
                 </tr>
                 </thead>
                 <tbody id="peersTableBody">
+                <tr>
+                    <td colspan="3" class="text-center">...</td>
+                </tr>
+                </tbody>
+            </table>
+            <table id="tableSessions" class="d-none">
+                <thead>
+                <tr>
+                    <th class="toggle-view-btn" title="Switch to Prefixes view">Session <span class="toggle-view-icon">⇄</span></th>
+                    <th>Avg Rate (60 min)</th>
+                    <th>Rate</th>
+                </tr>
+                </thead>
+                <tbody id="sessionsRateTableBody">
                 <tr>
                     <td colspan="3" class="text-center">...</td>
                 </tr>
@@ -87,9 +101,9 @@
     <div class="controls-section">
         <div class="controls-grid">
             <div id="peerLookup" class="styledForm">
-                <div class="title">Peer ASN lookup</div>
+                <div class="title">Peer AS lookup</div>
                 <form action="user/" method="GET">
-                    <input type="number" name="asn" placeholder="Enter ASN" required>
+                    <input type="number" name="asn" placeholder="Enter AS" required>
                     <button type="submit" class="styled-btn">View</button>
                 </form>
             </div>
@@ -176,7 +190,7 @@
 <dialog id="peerHistoryDialog">
     <button id="closePeerHistoryDialog" class="styled-btn square float-right">Close</button>
     <button id="refreshPeerHistory" class="styled-btn square float-right">Refresh</button>
-    <h2>Rate History for peer: <span id="peerHistoryASN"></span></h2>
+    <h2>Rate History for Peer AS: <span id="peerHistoryASN"></span></h2>
     <div class="overflow-x-auto">
         <div id="chartPeerHistoryContainer">
             <canvas id="chartPeerHistory"></canvas>
@@ -184,6 +198,39 @@
     </div>
     <p id="peerHistoryDetails"></p>
     <p id="peerHistoryStatus"></p>
+</dialog>
+<dialog id="sessionPeerDialog">
+    <button id="closeSessionPeerDialog" class="styled-btn square float-right">Close</button>
+    <button id="refreshSessionPeer" class="styled-btn square float-right">Refresh</button>
+    <h2>Session details: <span id="sessionPeerLabel"></span></h2>
+    <div class="SessionPeer-tabs">
+        <button id="sessionPeerRatesTab" class="styled-btn square" type="button">Peer AS rates</button>
+        <button id="sessionPrefixesTab" class="styled-btn square secondary" type="button">Prefixes (5 min)</button>
+    </div>
+    <div id="sessionPeerRatesView" class="overflow-x-auto">
+        <table class="SessionsDialog-table">
+            <thead>
+            <tr class="SessionsDialog-headerRow">
+                <th class="SessionsDialog-headerCell">Peer AS</th>
+                <th class="SessionsDialog-headerCell">Avg Rate (60 min)</th>
+                <th class="SessionsDialog-headerCell">Rate</th>
+            </tr>
+            </thead>
+            <tbody id="sessionPeerTableBody"></tbody>
+        </table>
+    </div>
+    <div id="sessionPrefixesView" class="overflow-x-auto d-none">
+        <table class="SessionsDialog-table">
+            <thead>
+            <tr class="SessionsDialog-headerRow">
+                <th class="SessionsDialog-headerCell">Prefix</th>
+                <th class="SessionsDialog-headerCell">Route Changes</th>
+                <th class="SessionsDialog-headerCell">Rate</th>
+            </tr>
+            </thead>
+            <tbody id="sessionPrefixTableBody"></tbody>
+        </table>
+    </div>
 </dialog>
 </body>
 </html>

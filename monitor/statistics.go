@@ -38,10 +38,6 @@ func GetAverageRouteChanges90() float64 {
 	return avg / statisticsCollectionIntervalSec
 }
 
-func GetSessionInfoJson() (string, error) {
-	return session.GetSessionInfoJson()
-}
-
 type Metric struct {
 	ActiveFlapCount                int
 	ActiveFlapTotalPathChangeCount uint64
@@ -74,12 +70,14 @@ func GetMetric() Metric {
 
 // -------------------------------------------------------
 const statisticsCollectionIntervalSec = 5
+const sessionRateIntervalSec = 60
 
 type statisticWrapper struct {
-	List      []FlapSummary
-	ListPeers []PeerSummary
-	Stats     statistic
-	Sessions  int
+	List         []FlapSummary
+	ListPeers    []PeerSummary
+	ListSessions []session.Info
+	Stats        statistic
+	Sessions     int
 }
 type FlapSummary struct {
 	Prefix     string
@@ -124,11 +122,18 @@ var lastPeerSummaryList atomic.Pointer[[]PeerSummary]
 func statTracker(ctx context.Context) {
 	ticker := time.NewTicker(time.Duration(statisticsCollectionIntervalSec) * time.Second)
 	defer ticker.Stop()
+	sessionRateElapsed := 0
 	for {
 		select {
 		case <-ticker.C:
 		case <-ctx.Done():
 			return
+		}
+
+		sessionRateElapsed += statisticsCollectionIntervalSec
+		if sessionRateElapsed >= sessionRateIntervalSec {
+			session.UpdateRates(sessionRateIntervalSec)
+			sessionRateElapsed = 0
 		}
 
 		aFlap, trackedCount := analyze.GetActiveFlapList()
@@ -179,10 +184,11 @@ func statTracker(ctx context.Context) {
 		}
 
 		newWrapper := statisticWrapper{
-			List:      jsFlapList,
-			ListPeers: jsPeerList,
-			Stats:     newStatistic,
-			Sessions:  session.GetSessionCount(),
+			List:         jsFlapList,
+			ListPeers:    jsPeerList,
+			ListSessions: session.GetSessionInfo(false),
+			Stats:        newStatistic,
+			Sessions:     session.GetSessionCount(),
 		}
 
 		statSubscribersLock.Lock()
@@ -209,10 +215,11 @@ func GetStats() []statisticWrapper {
 	result := make([]statisticWrapper, len(statList))
 	for i := range statList {
 		result[i] = statisticWrapper{
-			List:      nil,
-			ListPeers: nil,
-			Stats:     statList[i],
-			Sessions:  -1,
+			List:         nil,
+			ListPeers:    nil,
+			ListSessions: nil,
+			Stats:        statList[i],
+			Sessions:     -1,
 		}
 	}
 	if len(statList) > 0 {
@@ -221,6 +228,7 @@ func GetStats() []statisticWrapper {
 		if l != nil {
 			result[len(statList)-1].List = *l
 			result[len(statList)-1].ListPeers = *p
+			result[len(statList)-1].ListSessions = session.GetSessionInfo(false)
 			result[len(statList)-1].Sessions = session.GetSessionCount()
 		}
 	}

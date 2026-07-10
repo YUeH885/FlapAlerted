@@ -355,23 +355,112 @@ function addToChart(liveChart, points, unixTime, dataInterval, update) {
 
 const prefixTable = document.getElementById("prefixTableBody");
 const peersTableBody = document.getElementById("peersTableBody");
+const sessionsRateTableBody = document.getElementById("sessionsRateTableBody");
 const tablePrefixes = document.getElementById("tablePrefixes");
 const tablePeers = document.getElementById("tablePeers");
+const tableSessions = document.getElementById("tableSessions");
 
-let activeTableView = 'prefixes';
+const tableViews = [tablePrefixes, tablePeers, tableSessions];
+let activeTableView = 0;
 document.querySelectorAll(".toggle-view-btn").forEach(btn => {
     btn.addEventListener("click", () => {
-        if (activeTableView === 'prefixes') {
-            activeTableView = 'peers';
-            tablePrefixes.classList.add('d-none');
-            tablePeers.classList.remove('d-none');
-        } else {
-            activeTableView = 'prefixes';
-            tablePrefixes.classList.remove('d-none');
-            tablePeers.classList.add('d-none');
-        }
+        activeTableView = (activeTableView + 1) % tableViews.length;
+        tableViews.forEach((table, i) => table.classList.toggle("d-none", i !== activeTableView));
     });
 });
+
+function formatRate(rate, digits = 0) {
+    return Number.isFinite(rate) && rate !== -1 ? `${rate.toFixed(digits)}/s` : "..";
+}
+
+function getSessionLabel(item) {
+    return item.Hostname || item.Remote || item.RouterID || "--";
+}
+
+const sessionPeerDialog = document.getElementById("sessionPeerDialog");
+const sessionPeerLabel = document.getElementById("sessionPeerLabel");
+const sessionPeerTableBody = document.getElementById("sessionPeerTableBody");
+const sessionPrefixTableBody = document.getElementById("sessionPrefixTableBody");
+const sessionPeerRatesTab = document.getElementById("sessionPeerRatesTab");
+const sessionPrefixesTab = document.getElementById("sessionPrefixesTab");
+const sessionPeerRatesView = document.getElementById("sessionPeerRatesView");
+const sessionPrefixesView = document.getElementById("sessionPrefixesView");
+const refreshSessionPeerBtn = document.getElementById("refreshSessionPeer");
+let currentSessionPeer = null;
+
+function showSessionPeerView(view) {
+    const showPrefixes = view === "prefixes";
+    sessionPeerRatesView.classList.toggle("d-none", showPrefixes);
+    sessionPrefixesView.classList.toggle("d-none", !showPrefixes);
+    sessionPeerRatesTab.classList.toggle("secondary", showPrefixes);
+    sessionPrefixesTab.classList.toggle("secondary", !showPrefixes);
+}
+
+sessionPeerRatesTab.onclick = () => showSessionPeerView("peers");
+sessionPrefixesTab.onclick = () => showSessionPeerView("prefixes");
+
+document.getElementById("closeSessionPeerDialog").onclick = () => {
+    showSessionPeerView("peers");
+    sessionPeerDialog.close();
+};
+refreshSessionPeerBtn.onclick = () => {
+    if (currentSessionPeer) showSessionPeerRates(currentSessionPeer, sessionPeerLabel.textContent).then();
+};
+
+function sessionLinkCell(session, label = getSessionLabel(session), className = "") {
+    const cell = document.createElement("td");
+    if (className) cell.classList.add(className);
+
+    const link = document.createElement("a");
+    link.href = "#";
+    link.textContent = label;
+    link.addEventListener("click", (e) => {
+        e.preventDefault();
+        showSessionPeerView("peers");
+        showSessionPeerRates(session, label).then();
+    });
+
+    cell.appendChild(link);
+    return cell;
+}
+
+async function showSessionPeerRates(session, label = getSessionLabel(session)) {
+    currentSessionPeer = session;
+    sessionPeerLabel.textContent = label;
+    sessionPeerTableBody.innerHTML = '<tr><td colspan="3" class="SessionsDialog-bodyCell text-center">Loading...</td></tr>';
+    sessionPrefixTableBody.innerHTML = '<tr><td colspan="3" class="SessionsDialog-bodyCell text-center">Loading...</td></tr>';
+    if (!sessionPeerDialog.open) sessionPeerDialog.showModal();
+
+    let freshSession;
+    try {
+        const response = await fetch("sessions?peerRates=1", getFetchOptions());
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        freshSession = (await response.json()).find((entry) => entry.Remote === session.Remote);
+        if (freshSession) currentSessionPeer = freshSession;
+    } catch {
+        sessionPeerTableBody.innerHTML = '<tr><td colspan="3" class="SessionsDialog-bodyCell text-center">Failed to load peer AS rates</td></tr>';
+        sessionPrefixTableBody.innerHTML = '<tr><td colspan="3" class="SessionsDialog-bodyCell text-center">Failed to load prefix updates</td></tr>';
+        return;
+    }
+
+    const peerRates = freshSession?.PeerRates || [];
+    sessionPeerTableBody.innerHTML = peerRates.length === 0
+        ? '<tr><td colspan="3" class="SessionsDialog-bodyCell text-center">No peer AS rates yet</td></tr>'
+        : peerRates.map((peer) => `<tr${peer.RateSec < 1 ? ' class="inactive"' : ""}>
+            <td class="SessionsDialog-bodyCell">${peer.ASN}</td>
+            <td class="SessionsDialog-bodyCell">${formatRate(peer.RateSecAvg, 2)}</td>
+            <td class="SessionsDialog-bodyCell">${formatRate(peer.RateSec)}</td>
+        </tr>`).join("");
+
+    const prefixes = freshSession?.RecentPrefixes || [];
+    sessionPrefixTableBody.innerHTML = prefixes.length === 0
+        ? '<tr><td colspan="3" class="SessionsDialog-bodyCell text-center">No prefix updates in the last 5 minutes</td></tr>'
+        : prefixes.map((prefix) => `<tr${prefix.RateSec < 0.001 ? ' class="inactive"' : ""}>
+        <td class="SessionsDialog-bodyCell"><a target="_blank" href="analyze/?prefix=${encodeURIComponent(prefix.Prefix)}&sessionRemote=${encodeURIComponent(currentSessionPeer.Remote)}">${prefix.Prefix}</a></td>
+        <td class="SessionsDialog-bodyCell">${truncateRouteChanges(prefix.RouteChanges)}</td>
+        <td class="SessionsDialog-bodyCell">${formatRate(prefix.RateSec, 3)}</td>
+    </tr>`).join("");
+}
 
 function updatePeers(peerList) {
     if (!peerList) {
@@ -394,14 +483,13 @@ function updatePeers(peerList) {
         if (hideZeroRateEvents && item.RateSec < 1) continue;
 
         const rowClass = item.RateSec < 1 ? ' class="inactive"' : "";
-        const rateDisplayAvg = item.RateSecAvg !== -1 ? `${item.RateSecAvg.toFixed(2)}/s` : "..";
-        const rateDisplay = item.RateSec !== -1 ? `${item.RateSec}/s` : "..";
+        const rateDisplayAvg = formatRate(item.RateSecAvg, 2);
+        const rateDisplay = formatRate(item.RateSec);
 
         const tr = document.createElement("tr");
         if (rowClass) tr.className = "inactive";
-
         const explorerLink = (typeof explorerURLPrefixASN !== 'undefined' && explorerURLPrefixASN) ?
-            `<span>&nbsp;|&nbsp;</span><a href="${explorerURLPrefixASN}${item.ASN}" target="_blank" rel="noopener noreferrer" title="Lookup ASN" class="asnExplorerLink">
+            `<span>&nbsp;|&nbsp;</span><a href="${explorerURLPrefixASN}${item.ASN}" target="_blank" rel="noopener noreferrer" title="Lookup AS" class="asnExplorerLink">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
                     <polyline points="15 3 21 3 21 9"></polyline>
@@ -421,10 +509,47 @@ function updatePeers(peerList) {
             e.preventDefault();
             showPeerHistory(item.ASN).then();
         });
-
         asnLink.addEventListener("auxclick", (e) => e.preventDefault());
 
         peersTableBody.appendChild(tr);
+    }
+}
+
+function updateSessions(sessionList) {
+    if (!sessionList) {
+        sessionsRateTableBody.innerHTML = '<tr><td colspan="3" class="text-center"><b>Please wait</b></td></tr>';
+        return;
+    }
+
+    if (sessionList.length === 0) {
+        sessionsRateTableBody.innerHTML = '<tr><td colspan="3" class="text-center">No established sessions</td></tr>';
+        return;
+    }
+
+    sessionsRateTableBody.innerHTML = "";
+    let shown = false;
+
+    for (const item of sessionList.sort((a, b) => (b.RateSecAvg ?? -1) - (a.RateSecAvg ?? -1))) {
+        if (hideZeroRateEvents && item.RateSec < 1) continue;
+
+        const row = document.createElement("tr");
+        if (item.RateSec < 1) row.className = "inactive";
+
+        row.appendChild(sessionLinkCell(item));
+
+        [
+            formatRate(item.RateSecAvg, 2),
+            formatRate(item.RateSec)
+        ].forEach((text) => {
+            row.insertCell().textContent = text;
+        });
+
+        sessionsRateTableBody.appendChild(row);
+        shown = true;
+    }
+
+    if (!shown) {
+        sessionsRateTableBody.innerHTML = '<tr><td colspan="3" class="text-center">No sessions with route changes</td></tr>';
     }
 }
 
@@ -452,7 +577,7 @@ async function fetchPeerHistory(asn) {
 
             peerHistoryChartContainer.classList.add('d-none');
 
-            statusElem.innerText = "No historical data available for this ASN";
+            statusElem.innerText = "No historical data available for this AS";
             return;
         }
 
@@ -503,7 +628,7 @@ function updateList(flapList) {
         if (hideZeroRateEvents && item.RateSec < 1) continue;
 
         const rowClass = item.RateSec < 1 ? ' class="inactive"' : "";
-        const rateDisplay = item.RateSec !== -1 ? `${item.RateSec}/s` : "..";
+        const rateDisplay = formatRate(item.RateSec);
 
         rows.push(`<tr${rowClass}>
             <td><a target="_blank" href='analyze/?prefix=${encodeURIComponent(item.Prefix)}'>${item.Prefix}</a></td>
@@ -549,6 +674,7 @@ function getStats() {
 
             const flapList = js["List"];
             const peerList = js["ListPeers"];
+            const sessionList = js["ListSessions"];
             const stats = js["Stats"];
             const sessionCount = js["Sessions"];
             if (sessionCount !== -1) {
@@ -568,6 +694,7 @@ function getStats() {
 
             updateList(flapList);
             updatePeers(peerList);
+            updateSessions(sessionList);
 
 
             addToChart(liveRouteChart, [stats["Changes"], stats["ListedChanges"]], stats["Time"], dataIntervalSec, update);
@@ -652,9 +779,9 @@ getStats();
 
                 data.forEach((entry) => {
                     const row = document.createElement("tr");
+                    row.appendChild(sessionLinkCell(entry, entry.Remote, "SessionsDialog-bodyCell"));
 
                     const cells = [
-                        entry.Remote,
                         entry.RouterID,
                         entry.Hostname || "--",
                         toTimeElapsed(now - entry.EstablishTime),

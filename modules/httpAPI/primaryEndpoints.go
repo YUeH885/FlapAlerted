@@ -2,6 +2,7 @@ package httpAPI
 
 import (
 	"FlapAlerted/analyze"
+	"FlapAlerted/bgp/session"
 	"FlapAlerted/monitor"
 	cryptorand "crypto/rand"
 	"encoding/base64"
@@ -157,11 +158,17 @@ func getHistoricalList(w http.ResponseWriter, _ *http.Request) {
 	_ = json.NewEncoder(w).Encode(list)
 }
 
-func getBgpSessions(w http.ResponseWriter, _ *http.Request) {
-	info, err := monitor.GetSessionInfoJson()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+func getBgpSessions(w http.ResponseWriter, r *http.Request) {
+	_ = json.NewEncoder(w).Encode(session.GetSessionInfo(r.URL.Query().Get("peerRates") == "1"))
+}
+
+func getBgpSessionPrefix(w http.ResponseWriter, r *http.Request) {
+	prefix, err := netip.ParsePrefix(r.URL.Query().Get("prefix"))
+	if err == nil {
+		if report, found := session.GetSessionPrefixReport(r.URL.Query().Get("remote"), prefix); found {
+			_ = json.NewEncoder(w).Encode(report)
+			return
+		}
 	}
-	_, _ = w.Write([]byte(info))
+	_, _ = w.Write([]byte("null"))
 }

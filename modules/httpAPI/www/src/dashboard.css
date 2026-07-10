@@ -182,7 +182,8 @@ dialog[open]::backdrop {
     color: white;
 }
 
-#prefixTableBox table#tablePeers th {
+#prefixTableBox table#tablePeers th,
+#prefixTableBox table#tableSessions th {
     background: #8525eb;
 }
 
@@ -462,7 +463,9 @@ body.gauge-only {
     }
 }
 
-#peerHistoryDialog {
+#sessionsDialog,
+#peerHistoryDialog,
+#sessionPeerDialog {
     border: none;
     border-radius: var(--radius);
     padding: 2rem;
@@ -471,13 +474,38 @@ body.gauge-only {
     box-shadow: 0 10px 25px rgb(0 0 0 / 20%);
 }
 
+#sessionPeerLabel {
+    overflow-wrap: anywhere;
+}
+
+#sessionPeerDialog .overflow-x-auto {
+    max-height: min(65vh, 42rem);
+    overflow: auto;
+}
+
+#sessionPeerDialog .SessionsDialog-table thead {
+    position: sticky;
+    top: 0;
+}
+
+.SessionsDialog-table tr.inactive {
+    color: grey;
+}
+
+.SessionPeer-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
 #chartPeerHistoryContainer {
     height: 300px;
     margin-top: 20px;
     min-width: 20em;
 }
 
-#refreshPeerHistory {
+#refreshPeerHistory,
+#refreshSessionPeer {
     margin-right: 0.5rem;
 }
 
